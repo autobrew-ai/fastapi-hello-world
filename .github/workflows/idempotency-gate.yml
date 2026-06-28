@@ -1,0 +1,35 @@
+name: idempotency-gate
+
+# Runs on PRs and pushes to the deploy branch. Make this a required status check in
+# branch protection, and enable Railway's "Wait for CI" so a failure here holds the
+# deployment (Railway marks it SKIPPED if the workflow fails).
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  idempotency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest
+
+      - name: Validate idempotency checkpoint (integrity + coverage)
+        run: python ci/validate_checkpoint.py .idempotency-checkpoint.json
+
+      - name: Run idempotency tests (the real gate)
+        run: |
+          TESTS=$(python -c "import json,sys; print(' '.join(json.load(open('.idempotency-checkpoint.json'))['tests']))")
+          echo "Running: $TESTS"
+          pytest -q $TESTS
